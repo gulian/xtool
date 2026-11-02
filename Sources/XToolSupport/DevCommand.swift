@@ -147,6 +147,13 @@ struct DevBuildCommand: AsyncParsableCommand {
     @Flag(help: "Print supported platforms without building or requiring an SDK")
     var printSupportedPlatforms = false
 
+    @Option(help: ArgumentHelp(
+        "UDID of a device to register before signing",
+        discussion: "Use with --sign for platforms xtool cannot discover over usbmuxd, such as an Apple TV."
+    )) var deviceUdid: String?
+
+    @Option(help: "Name to register the --device-udid device under") var deviceName: String?
+
     @OptionGroup(title: "Distribution signing") var distribution: DistributionSigningOptions
 
     func validate() throws {
@@ -164,8 +171,11 @@ struct DevBuildCommand: AsyncParsableCommand {
         if ipa && platform.usesContentsDirectory {
             throw Console.Error("macOS and Mac Catalyst apps cannot be packaged as an IPA. Use the .app output.")
         }
-        if sign && platform != .iOS {
-            throw Console.Error("Automatic development signing currently supports iOS only. Sign this platform's .app separately.")
+        if sign && platform != .iOS && platform != .tvOS {
+            throw Console.Error("Automatic development signing currently supports iOS and tvOS only. Sign this platform's .app separately.")
+        }
+        if deviceUdid != nil && !sign {
+            throw Console.Error("--device-udid only applies with --sign.")
         }
         let signingAuthToken: AuthToken?
         if sign {
@@ -190,7 +200,11 @@ struct DevBuildCommand: AsyncParsableCommand {
             )
             do {
                 defer { d.out.print() }
-                try await installer.signInPlace(app: url)
+                try await installer.signInPlace(
+                    app: url,
+                    targetDevice: deviceUdid.map { .init(udid: $0, name: deviceName ?? "Apple TV") },
+                    platform: platform == .tvOS ? .tvOS : .iOS
+                )
             } catch let error as CancellationError {
                 throw error
             } catch {

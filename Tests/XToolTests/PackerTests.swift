@@ -54,7 +54,7 @@ import Subprocess
 func nativeDesktopPackageResourcesRequireSwiftBuild(platform: ApplePlatform, extensionOnly: Bool) throws {
     var app = Plan.Product(
         type: .application, product: "Example", deploymentTarget: "17.0", bundleID: "com.example.app",
-        infoPlist: [:], resources: [.root(source: "custom.txt")], iconPath: nil, entitlementsPath: nil
+        infoPlist: [:], resources: [.root(source: "custom.txt")], modules: [], iconPath: nil, entitlementsPath: nil
     )
     var ext = app
     ext.type = .appExtension
@@ -195,7 +195,7 @@ func packsPlatformBundleAndExtension(triple: String) async throws {
     let app = Plan.Product(
         type: .application, product: "Example", deploymentTarget: "17.0", bundleID: "com.example.app",
         infoPlist: ["CFBundleIdentifier": "com.example.app", "DTSDKBuild": "stale-build"],
-        resources: [.bundle(package: "Example", target: "Content"), .library(name: "Shared")],
+        resources: [.bundle(package: "Example", target: "Content"), .library(name: "Shared")], modules: [],
         iconPath: nil, entitlementsPath: nil
     )
     var ext = app

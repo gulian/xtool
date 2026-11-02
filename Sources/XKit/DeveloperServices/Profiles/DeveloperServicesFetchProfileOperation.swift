@@ -16,6 +16,7 @@ public struct DeveloperServicesFetchProfileOperation: DeveloperServicesOperation
         case bundleIDNotFound
         case tooManyMatchingBundleIDs
         case invalidProfileData
+        case noRegisteredDevices(DeveloperServicesPlatform)
     }
 
     public let context: SigningContext
@@ -65,12 +66,16 @@ public struct DeveloperServicesFetchProfileOperation: DeveloperServicesOperation
         .reduce(into: [], +=)
         .filter {
             $0.attributes?.status?.value1 != .disabled
-            && $0.attributes?.deviceClass?.value1?.supportsIOSApps == true
+            && $0.attributes?.deviceClass?.value1?.supportsApps(on: context.platform) == true
         }
+
+        // A development profile needs at least one device; Apple otherwise answers with a bare 409.
+        guard !allDevices.isEmpty else { throw Errors.noRegisteredDevices(context.platform) }
 
         try Task.checkCancellation()
 
-        let profileName = "XTL profile \(bundleID.id)"
+        // An app can share its identifier between iOS and tvOS: a name each, or one's profile replaces the other's.
+        let profileName = "XTL \(context.platform == .tvOS ? "tvOS " : "")profile \(bundleID.id)"
 
         let profiles = bundleID.relationships?.profiles?.data ?? []
         if !profiles.isEmpty {
@@ -96,7 +101,7 @@ public struct DeveloperServicesFetchProfileOperation: DeveloperServicesOperation
                         _type: .profiles,
                         attributes: .init(
                             name: profileName,
-                            profileType: .init(.iosAppDevelopment)
+                            profileType: .init(context.platform == .tvOS ? .tvosAppDevelopment : .iosAppDevelopment)
                         ),
                         relationships: .init(
                             bundleId: .init(
@@ -124,11 +129,35 @@ public struct DeveloperServicesFetchProfileOperation: DeveloperServicesOperation
 
 }
 
-extension Components.Schemas.Device.AttributesPayload.DeviceClassPayload.Value1Payload {
-    fileprivate var supportsIOSApps: Bool {
+extension DeveloperServicesFetchProfileOperation.Errors: LocalizedError, CustomStringConvertible {
+    public var errorDescription: String? {
         switch self {
-        case .ipad, .iphone, .ipod: true
-        default: false
+        case .noRegisteredDevices(let platform):
+            "No \(platform) device is registered on this account. Register one with --device-udid."
+        default:
+            nil
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .bundleIDNotFound: "bundleIDNotFound"
+        case .tooManyMatchingBundleIDs: "tooManyMatchingBundleIDs"
+        case .invalidProfileData: "invalidProfileData"
+        case .noRegisteredDevices: errorDescription ?? "noRegisteredDevices"
+        }
+    }
+}
+
+extension Components.Schemas.Device.AttributesPayload.DeviceClassPayload.Value1Payload {
+    func supportsApps(on platform: DeveloperServicesPlatform) -> Bool {
+        switch platform {
+        case .tvOS:
+            self == .appleTv
+        case .iOS:
+            self == .ipad || self == .iphone || self == .ipod
+        default:
+            false
         }
     }
 }
