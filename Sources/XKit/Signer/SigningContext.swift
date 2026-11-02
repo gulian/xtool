@@ -14,10 +14,17 @@ public struct SigningContext: Sendable {
     public struct TargetDevice: Sendable, Hashable {
         public var udid: String
         public var name: String
+
+        public init(udid: String, name: String) {
+            self.udid = udid
+            self.name = name
+        }
     }
 
     public var auth: DeveloperAPIAuthData
     public var targetDevice: TargetDevice?
+    /// Selects the development profile type and the registered devices it includes.
+    public var platform: DeveloperServicesPlatform
 
     public var developerAPIClient: DeveloperAPIClient {
         DeveloperAPIClient(auth: auth)
@@ -25,10 +32,12 @@ public struct SigningContext: Sendable {
 
     public init(
         auth: DeveloperAPIAuthData,
-        targetDevice: TargetDevice? = nil
+        targetDevice: TargetDevice? = nil,
+        platform: DeveloperServicesPlatform = .iOS
     ) {
         self.auth = auth
         self.targetDevice = targetDevice
+        self.platform = platform
     }
 
 }
