@@ -1,0 +1,21 @@
+# XcodeGen spec, used only by the reference build in .github/workflows/tflab-xcode.yml
+name: TFLab
+options:
+  deploymentTarget:
+    iOS: "26.0"
+targets:
+  TFLab:
+    type: application
+    platform: iOS
+    sources:
+      - Sources/TFLab
+      - Resources/Assets.xcassets
+    info:
+      path: Resources/Info.plist
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: fr.gulian.tflab
+      PRODUCT_NAME: TFLab
+      ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      TARGETED_DEVICE_FAMILY: "1,2"
+      GENERATE_INFOPLIST_FILE: NO
+      CODE_SIGNING_ALLOWED: NO

@@ -1,0 +1,37 @@
+# Reference build of Examples/TFLab with Xcode, unsigned, to compare with the .ipa xtool builds on Linux.
+# Sign and upload the result with `xtool sign` and `xtool upload`.
+name: TFLab reference (Xcode)
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: CFBundleVersion
+        required: true
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -v -i beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          sw_vers
+      - run: brew install xcodegen
+      - name: Build
+        working-directory: Examples/TFLab
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ inputs.build }}" Resources/Info.plist
+          xcodegen generate
+          xcodebuild -project TFLab.xcodeproj -scheme TFLab -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/TFLab.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/TFLab.xcarchive/Products/Applications/TFLab.app" "$RUNNER_TEMP/ipa/Payload/"
+          cd "$RUNNER_TEMP/ipa" && zip -qry TFLab-xcode.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TFLab-xcode-${{ inputs.build }}
+          path: ${{ runner.temp }}/ipa/TFLab-xcode.ipa
