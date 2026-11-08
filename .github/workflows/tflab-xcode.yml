@@ -30,7 +30,8 @@ jobs:
           xcodegen generate
           xcodebuild -project TFLab.xcodeproj -scheme TFLab -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/TFLab.xcarchive" archive CODE_SIGNING_ALLOWED=NO
+            -archivePath "$RUNNER_TEMP/TFLab.xcarchive" archive CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD" MARKETING_VERSION=1.0
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$RUNNER_TEMP/TFLab.xcarchive/Products/Applications/TFLab.app" "$RUNNER_TEMP/ipa/Payload/"
           cd "$RUNNER_TEMP/ipa" && zip -qry TFLab-xcode.ipa Payload
