@@ -1,5 +1,6 @@
 import Foundation
 import XKit
+import XCLIUtils
 import ArgumentParser
 
 struct UploadCommand: AsyncParsableCommand {
