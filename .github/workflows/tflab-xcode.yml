@@ -2,11 +2,14 @@
 # Sign and upload the result with `xtool sign` and `xtool upload`.
 name: TFLab reference (Xcode)
 on:
-  workflow_dispatch:
-    inputs:
-      build:
-        description: CFBundleVersion
-        required: true
+  push:
+    branches: [testflight-linux]
+    paths:
+      - .github/workflows/tflab-xcode.yml
+      - Examples/TFLab/**
+env:
+  # CFBundleVersion of the reference build, above the ones uploaded from Linux
+  BUILD: ${{ github.run_number }}0
 jobs:
   build:
     runs-on: macos-latest
@@ -23,7 +26,7 @@ jobs:
       - name: Build
         working-directory: Examples/TFLab
         run: |
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ inputs.build }}" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" Resources/Info.plist
           xcodegen generate
           xcodebuild -project TFLab.xcodeproj -scheme TFLab -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' \
@@ -33,5 +36,5 @@ jobs:
           cd "$RUNNER_TEMP/ipa" && zip -qry TFLab-xcode.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: TFLab-xcode-${{ inputs.build }}
+          name: TFLab-xcode-${{ env.BUILD }}
           path: ${{ runner.temp }}/ipa/TFLab-xcode.ipa
