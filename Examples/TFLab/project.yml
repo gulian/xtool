@@ -18,4 +18,5 @@ targets:
       # Xcode adds the bundle keys to the same Info.plist xtool uses
       GENERATE_INFOPLIST_FILE: YES
       INFOPLIST_FILE: Resources/Info.plist
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
       CODE_SIGNING_ALLOWED: NO
