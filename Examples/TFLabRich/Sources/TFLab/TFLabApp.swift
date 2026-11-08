@@ -11,6 +11,7 @@ struct TFLabApp: App {
                     tile("a", "red square")
                     tile("HeroBackgroundImageLarge", "green disc")
                     tile("Moon", "yellow / blue in dark")
+                    tile("Big", "pink disc, 512 px")
                 }
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color("Brand", bundle: .main))
