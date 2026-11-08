@@ -55,7 +55,9 @@ let package = Package(
         .package(url: "https://github.com/xtool-org/swift-rcodesign", .upToNextMinor(from: "0.2.0")),
         // TODO: temporary, points at the branch of xtool-org/AssetKit#2. Switch to
         // .upToNextMinor(from: "<tag>") once AssetKit tags a release including it.
-        .package(url: "https://github.com/TartanLeGrand/AssetKit", revision: "90281d6dc0c4edef6176f9283283271198e4bafd"),
+        // TODO: temporary, points at gulian/AssetKit app-store-processing: xtool-org/AssetKit#3
+        // plus the BOM tree fixes App Store Connect needs. Switch to a tag once released.
+        .package(url: "https://github.com/gulian/AssetKit", revision: "b71e80e581bbcd2f18c2451a737a084e23e7077b"),
 
         .package(url: "https://github.com/apple/swift-system", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.3.1"),
