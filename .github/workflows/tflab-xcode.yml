@@ -6,12 +6,15 @@ on:
     branches: [testflight-linux]
     paths:
       - .github/workflows/tflab-xcode.yml
-      - Examples/TFLab/**
+      - Examples/TFLab*/**
 env:
   # CFBundleVersion of the reference build, above the ones uploaded from Linux
   BUILD: ${{ github.run_number }}0
 jobs:
   build:
+    strategy:
+      matrix:
+        app: [TFLab, TFLabMulti]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +27,7 @@ jobs:
           sw_vers
       - run: brew install xcodegen
       - name: Build
-        working-directory: Examples/TFLab
+        working-directory: Examples/${{ matrix.app }}
         run: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" Resources/Info.plist
           xcodegen generate
@@ -37,5 +40,5 @@ jobs:
           cd "$RUNNER_TEMP/ipa" && zip -qry TFLab-xcode.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
-          name: TFLab-xcode-${{ env.BUILD }}
+          name: ${{ matrix.app }}-xcode-${{ env.BUILD }}
           path: ${{ runner.temp }}/ipa/TFLab-xcode.ipa
