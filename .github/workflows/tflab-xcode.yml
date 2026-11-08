@@ -14,7 +14,7 @@ jobs:
   build:
     strategy:
       matrix:
-        app: [TFLab, TFLabMulti]
+        app: [TFLab, TFLabMulti, TFLabRich]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

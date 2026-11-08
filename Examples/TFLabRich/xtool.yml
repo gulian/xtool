@@ -1,0 +1,6 @@
+version: 1
+bundleID: fr.gulian.tflab
+product: TFLab
+infoPath: Resources/Info.plist
+assetCatalogs:
+- Resources/Assets.xcassets

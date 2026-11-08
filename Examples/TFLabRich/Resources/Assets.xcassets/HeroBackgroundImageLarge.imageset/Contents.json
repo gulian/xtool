@@ -1,0 +1,23 @@
+{
+  "images": [
+    {
+      "filename": "HeroBackgroundImageLarge-light@1x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "HeroBackgroundImageLarge-light@2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "HeroBackgroundImageLarge-light@3x.png",
+      "idiom": "universal",
+      "scale": "3x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
