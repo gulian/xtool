@@ -1,5 +1,5 @@
 {
-  "originHash" : "718d52e631844fe74248e50edc9814c0954441b6b6817323d9b45b291516e3ea",
+  "originHash" : "67df4c62a8743923cf5a575c070ed41905b0d4a4a92f81ce06e7d0fe08fcf4d9",
   "pins" : [
     {
       "identity" : "aexml",
@@ -15,7 +15,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/gulian/AssetKit",
       "state" : {
-        "revision" : "b71e80e581bbcd2f18c2451a737a084e23e7077b"
+        "revision" : "1bb91b86a3ff7d340f54771b1b16bca814e2e088"
       }
     },
     {

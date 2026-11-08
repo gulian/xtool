@@ -57,7 +57,7 @@ let package = Package(
         // .upToNextMinor(from: "<tag>") once AssetKit tags a release including it.
         // TODO: temporary, points at gulian/AssetKit app-store-processing: xtool-org/AssetKit#3
         // plus the BOM tree fixes App Store Connect needs. Switch to a tag once released.
-        .package(url: "https://github.com/gulian/AssetKit", revision: "b71e80e581bbcd2f18c2451a737a084e23e7077b"),
+        .package(url: "https://github.com/gulian/AssetKit", revision: "1bb91b86a3ff7d340f54771b1b16bca814e2e088"),
 
         .package(url: "https://github.com/apple/swift-system", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.3.1"),
