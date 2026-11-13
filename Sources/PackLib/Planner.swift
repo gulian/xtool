@@ -81,11 +81,11 @@ public struct Planner: Sendable {
             from: graph,
             matching: schema.product,
             type: .application,
-            plist: schema.infoPath,
+            plist: tvIcon?.infoPath ?? schema.infoPath,
             idSpecifier: schema.idSpecifier,
             iconPath: tvIcon == nil ? schema.iconPath : nil,
             rootResources: (schema.resources ?? []) + (tvIcon.map { [$0.assetCatalogPath] } ?? []),
-            entitlementsPath: schema.entitlementsPath
+            entitlementsPath: tvIcon?.entitlementsPath ?? schema.entitlementsPath
         )
         if let tvIcon {
             appProduct.infoPlist["CFBundleIcons"] = ["CFBundlePrimaryIcon": tvIcon.appIconName]
