@@ -34,6 +34,9 @@ public struct PackSchemaBase: Codable, Sendable {
         public var assetCatalogPath: String
         /// The name of the app icon image stack inside the catalog.
         public var appIconName: String
+        /// The name of the wide top shelf picture inside the catalog, if it holds one:
+        /// the banner the home screen shows above the app when its icon has the focus.
+        public var topShelfImageWideName: String?
     }
 
     public struct Extension: Codable, Sendable {
