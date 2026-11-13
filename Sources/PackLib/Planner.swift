@@ -73,17 +73,26 @@ public struct Planner: Sendable {
 
         let graph = try await buildGraph()
 
-        let app = try await product(
+        // The tvOS home screen takes its icon from a layered image stack in Assets.car,
+        // named by CFBundleIcons, instead of the flat PNG used on iOS.
+        let tvIcon = buildSettings.platform == .tvOS ? schema.tvOS : nil
+
+        var appProduct = try await product(
             from: graph,
             matching: schema.product,
             type: .application,
             plist: schema.infoPath,
             idSpecifier: schema.idSpecifier,
-            iconPath: schema.iconPath,
-            rootResources: schema.resources,
-            assetCatalogPath: schema.assetCatalogs?.first,
+            iconPath: tvIcon == nil ? schema.iconPath : nil,
+            rootResources: (schema.resources ?? []) + (tvIcon.map { [$0.assetCatalogPath] } ?? []),
+            // an asset catalog is the iPhone's; a tvOS app brings its own, compiled
+            assetCatalogPath: platform == .iOS ? schema.assetCatalogs?.first : nil,
             entitlementsPath: schema.entitlementsPath
         )
+        if let tvIcon {
+            appProduct.infoPlist["CFBundleIcons"] = ["CFBundlePrimaryIcon": tvIcon.appIconName]
+        }
+        let app = appProduct
 
         let extensionProducts: [Plan.Product]
         if let extensions = schema.extensions, !extensions.isEmpty {

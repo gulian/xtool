@@ -26,6 +26,17 @@ public struct PackSchemaBase: Codable, Sendable {
     /// Skip auto-creating the LSP support file if it's missing.
     public var skipLSP: Bool?
 
+    /// Settings that only apply when building for tvOS.
+    public var tvOS: TVOS?
+
+    public struct TVOS: Codable, Sendable {
+        /// A compiled asset catalog (`Assets.car`) holding the layered app icon.
+        /// tvOS ignores `CFBundleIconFile`: its home screen only reads an image stack.
+        public var assetCatalogPath: String
+        /// The name of the app icon image stack inside the catalog.
+        public var appIconName: String
+    }
+
     public struct Extension: Codable, Sendable {
         public var product: String
         public var bundleID: String?
@@ -81,6 +92,13 @@ public struct PackSchema: Sendable {
         let catalogLists = [base.assetCatalogs] + (base.extensions ?? []).map(\.assetCatalogs)
         if catalogLists.contains(where: { ($0?.count ?? 0) > 1 }) {
             throw StringError("xtool.yml: assetCatalogs supports at most one catalog per product.")
+        }
+
+        if let catalog = base.tvOS?.assetCatalogPath {
+            let name = URL(fileURLWithPath: catalog).lastPathComponent
+            guard name == "Assets.car" else {
+                throw StringError("xtool.yml: tvOS.assetCatalogPath should point to a file named 'Assets.car'. Got '\(name)'.")
+            }
         }
     }
 
