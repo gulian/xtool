@@ -329,17 +329,13 @@ public struct Packer: Sendable {
                     try await packFile(srcName: name, dstName: destination)
                 case .binaryTarget(let name):
                     let src = URL(fileURLWithPath: "\(name).framework/\(name)", relativeTo: binDir)
-                    let magic = Data("!<arch>\n".utf8)
-                    let thinMagic = Data("!<thin>\n".utf8)
-                    guard let bytes = try? FileHandle(forReadingFrom: src).read(upToCount: magic.count) else {
+                    guard let isStatic = Self.isStaticArchive(src) else {
                         // if we can't find the binary, it might be a static framework that SwiftPM
                         // did not copy into the .build directory. we don't need to pack it anyway.
                         break
                     }
-                    // if the magic matches one of these it's a static archive; don't embed it.
-                    // https://github.com/apple/llvm-project/blob/e716ff14c46490d2da6b240806c04e2beef01f40/llvm/include/llvm/Object/Archive.h#L33
-                    // swiftlint:disable:previous line_length
-                    if bytes != magic && bytes != thinMagic {
+                    // a static archive is already linked into the executable; don't embed it.
+                    if !isStatic {
                         try await packFile(srcName: "\(name).framework", dstName: "Frameworks/\(name).framework", sign: true)
                     }
                 case .library(let name):
@@ -535,6 +531,42 @@ public struct Packer: Sendable {
 
     static func cfBundleSupportedPlatforms(for triple: String) -> [String] {
         [ApplePlatform(triple: triple)?.supportedPlatform(triple: triple) ?? "iPhoneOS"]
+    }
+
+    /// Whether the binary of a framework is a static archive: a plain one, or a universal file
+    /// whose slices are archives (what xcframeworks built with `lipo` ship). `nil` if unreadable.
+    // https://github.com/apple/llvm-project/blob/e716ff14c46490d2da6b240806c04e2beef01f40/llvm/include/llvm/Object/Archive.h#L33
+    // swiftlint:disable:previous line_length
+    static func isStaticArchive(_ url: URL) -> Bool? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let archiveMagics = [Data("!<arch>\n".utf8), Data("!<thin>\n".utf8)]
+        guard let head = try? handle.read(upToCount: 8), head.count == 8 else { return nil }
+        if archiveMagics.contains(head) { return true }
+
+        func word(_ data: Data, _ offset: Int) -> UInt64 {
+            data.dropFirst(offset).prefix(4).reduce(0) { $0 << 8 | UInt64($1) }
+        }
+        // FAT_MAGIC and FAT_MAGIC_64, big-endian on disk: the header is followed by `nfat_arch`
+        // entries of 20 bytes (32-bit offsets) or 32 bytes (64-bit offsets).
+        let magic = word(head, 0)
+        guard magic == 0xCAFE_BABE || magic == 0xCAFE_BABF else { return false }
+        let wide = magic == 0xCAFE_BABF
+        let count = Int(word(head, 4))
+        // a Java class file shares the magic; no real binary has that many slices.
+        guard (1...32).contains(count) else { return false }
+        let entrySize = wide ? 32 : 20
+        guard (try? handle.seek(toOffset: 8)) != nil,
+              let table = try? handle.read(upToCount: count * entrySize), table.count == count * entrySize
+        else { return false }
+        for index in 0..<count {
+            let entry = table.dropFirst(index * entrySize)
+            let offset = wide ? word(Data(entry), 8) << 32 | word(Data(entry), 12) : word(Data(entry), 8)
+            guard (try? handle.seek(toOffset: offset)) != nil,
+                  let slice = try? handle.read(upToCount: 8), archiveMagics.contains(slice)
+            else { return false }
+        }
+        return true
     }
 }
 
