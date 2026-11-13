@@ -91,6 +91,9 @@ public struct Planner: Sendable {
         )
         if let tvIcon {
             appProduct.infoPlist["CFBundleIcons"] = ["CFBundlePrimaryIcon": tvIcon.appIconName]
+            if let topShelf = tvIcon.topShelfImageWideName {
+                appProduct.infoPlist["TVTopShelfImage"] = ["TVTopShelfPrimaryImageWide": topShelf]
+            }
         }
         let app = appProduct
 
