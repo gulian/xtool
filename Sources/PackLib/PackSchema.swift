@@ -38,6 +38,12 @@ public struct PackSchemaBase: Codable, Sendable {
         /// The name of the wide top shelf picture inside the catalog, if it holds one:
         /// the banner the home screen shows above the app when its icon has the focus.
         public var topShelfImageWideName: String?
+        /// An Info.plist used instead of `infoPath` in the tvOS build, for an app whose iOS
+        /// one declares what a television has no use for (a CarPlay scene, orientations).
+        public var infoPath: String?
+        /// Entitlements used instead of `entitlementsPath` in the tvOS build: a tvOS profile
+        /// does not carry the iOS-only ones, and the install fails on the mismatch.
+        public var entitlementsPath: String?
     }
 
     public struct Extension: Codable, Sendable {
