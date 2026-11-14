@@ -201,10 +201,26 @@ public struct DeveloperServicesAddAppOperation: DeveloperServicesOperation {
         let newBundleID = appID.attributes!.identifier!
 
         let teamID = try signingInfo.certificate.teamID()
+        // update() below replaces keychain-access-groups with the app's own group. Remember the
+        // groups the build asked for, to put back the ones the team's profile allows (<team>.*).
+        let requestedKeychainGroups = (try? entitlements.entitlements())?
+            .lazy.compactMap { $0 as? KeychainAccessGroupsEntitlement }.first?.rawValue ?? []
         try entitlements.update(
             teamID: .init(rawValue: teamID),
             bundleID: newBundleID
         )
+        // The app's own group stays first: it is the default group of items added without one, so
+        // a shared group never becomes the default.
+        let sharedKeychainGroups = requestedKeychainGroups.filter { $0.hasPrefix("\(teamID).") }
+        if !sharedKeychainGroups.isEmpty {
+            try entitlements.updateEntitlements { ents in
+                guard let index = ents.firstIndex(where: { $0 is KeychainAccessGroupsEntitlement }),
+                    let own = (ents[index] as? KeychainAccessGroupsEntitlement)?.rawValue else { return }
+                var groups = own
+                for group in sharedKeychainGroups where !groups.contains(group) { groups.append(group) }
+                ents[index] = KeychainAccessGroupsEntitlement(rawValue: groups)
+            }
+        }
         // set get-task-allow to YES, required for dev certs
         try entitlements.updateEntitlements { ents in
             if let getTaskAllow = ents.firstIndex(where: { $0 is GetTaskAllowEntitlement }) {
