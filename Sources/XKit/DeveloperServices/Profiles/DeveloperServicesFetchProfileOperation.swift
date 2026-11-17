@@ -51,6 +51,22 @@ public struct DeveloperServicesFetchProfileOperation: DeveloperServicesOperation
         }
 
         let profiles = bundleID.relationships?.profiles?.data ?? []
+
+        // XTL_REUSE_PROFILE=1: keep the existing profile when it is still valid and covers the target
+        // device, without touching the devices endpoint (Apple answered it with a 500 on 2026-11-17).
+        if ProcessInfo.processInfo.environment["XTL_REUSE_PROFILE"] == "1", profiles.count == 1,
+           let content = try await context.developerAPIClient.profilesGetInstance(path: .init(id: profiles[0].id))
+               .ok.body.json.data.attributes?.profileContent,
+           let data = Data(base64Encoded: content) {
+            let profile = try Mobileprovision(data: data)
+            let digest = try profile.digest()
+            let device = context.targetDevice?.udid
+            if digest.expirationDate > Date().addingTimeInterval(86_400),
+               device.map({ udid in digest.devices.contains { $0.caseInsensitiveCompare(udid) == .orderedSame } }) ?? true {
+                return profile
+            }
+        }
+
         switch profiles.count {
         case 0:
             // we're good

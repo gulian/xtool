@@ -9,6 +9,15 @@ public struct DeveloperServicesAddDeviceOperation: DeveloperServicesOperation {
 
     public func perform() async throws {
         guard let targetDevice = context.targetDevice else { return }
+        // Profiles reused as they are (see DeveloperServicesFetchProfileOperation): no device to add.
+        if ProcessInfo.processInfo.environment["XTL_REUSE_PROFILE"] == "1" { return }
+
+        // Already registered: nothing to create. Since November 2026 Apple answers a second
+        // registration of the same UDID with a bare 500 (UNEXPECTED_ERROR) instead of a 409.
+        let registered = try await context.developerAPIClient.devicesGetCollection()
+            .ok.body.json.data
+            .contains { $0.attributes?.udid?.caseInsensitiveCompare(targetDevice.udid) == .orderedSame }
+        if registered { return }
 
         // try to register the device
         let response = try await context.developerAPIClient.devicesCreateInstance(
