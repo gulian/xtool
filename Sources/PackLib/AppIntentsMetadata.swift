@@ -65,7 +65,6 @@ struct AppIntentsMetadata {
     // and those that may hold anything because they never reach the index
     private static let defaultedParameterArguments: Set = [
         "description", "default", "controlStyle", "inclusiveRange", "inputConnectionBehavior",
-        "inputOptions", "supportedValues",
     ]
     private static let runtimeParameterArguments: Set = ["requestValueDialog"]
 
