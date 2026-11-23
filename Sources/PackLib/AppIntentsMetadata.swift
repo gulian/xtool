@@ -8,9 +8,10 @@ import Foundation
 /// `.swiftconstvalues` output though, which is JSON and available everywhere, so this
 /// writes the index itself, in the format of Xcode 26.6.
 ///
-/// This covers intents without parameters, the `LiveActivityIntent` and
-/// `AudioRecordingIntent` system protocols, and a single `AppShortcutsProvider`.
-/// Anything else throws `Unsupported` rather than producing a wrong index.
+/// This covers intents whose parameters are non-optional `Int` or `String` values with
+/// a literal title, the `LiveActivityIntent` and `AudioRecordingIntent` system protocols,
+/// and a single `AppShortcutsProvider`. Anything else throws `Unsupported` rather than
+/// producing a wrong index.
 struct AppIntentsMetadata {
     struct Unsupported: Error, CustomStringConvertible {
         var description: String
@@ -49,6 +50,24 @@ struct AppIntentsMetadata {
 
     // PerformResult protocols to outputFlags bits, only the ones seen in Xcode's output
     private static let outputFlags = ["AppIntents.IntentResult": 0, "AppIntents.ProvidesDialog": 4]
+
+    // Parameter value types to the value type and resolvable input types Xcode writes for them,
+    // only the ones seen in Xcode's output
+    private static let parameterTypes: [String: (valueType: JSONValue, inputTypes: [JSONValue])] = [
+        "Swift.Int": (primitive(2), [primitive(0), primitive(7), primitive(2)]),
+        "Swift.String": (
+            primitive(0),
+            [primitive(0), ["array": ["wrapper": ["capabilities": 3, "memberValueType": primitive(2)]]], primitive(2)]
+        ),
+    ]
+
+    // Arguments of `@Parameter(...)` that are understood when nil or left to their default,
+    // and those that may hold anything because they never reach the index
+    private static let defaultedParameterArguments: Set = [
+        "description", "default", "controlStyle", "inclusiveRange", "inputConnectionBehavior",
+        "inputOptions", "supportedValues",
+    ]
+    private static let runtimeParameterArguments: Set = ["requestValueDialog"]
 
     /// The const values entries of all modules linked into the bundle
     var entries: [JSONValue]
@@ -112,13 +131,13 @@ struct AppIntentsMetadata {
         }
 
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        // compact, as Xcode writes it, and version.json without a final newline
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let version = """
         {
           "version" : "3.0",
           "toolsVersion" : "\(Self.toolsVersion)"
         }
-
         """
         return [
             "extract.actionsdata": try encoder.encode(JSONValue.object(metadata)),
@@ -129,11 +148,7 @@ struct AppIntentsMetadata {
     private func action(_ entry: JSONValue) throws -> (String, JSONValue) {
         let name = entry.typeName
         let identifier = String(name.split(separator: ".").last ?? Substring(name))
-        for property in entry["properties"]?.array ?? [] {
-            if property["propertyWrappers"] != nil || property["label"]?.string?.hasPrefix("$") == true {
-                throw Unsupported(description: "\(name) has parameters")
-            }
-        }
+        let parameters = try (entry["properties"]?.array ?? []).compactMap { try Self.parameter($0, of: name) }
         if Self.property(entry, "supportedModes") != nil {
             throw Unsupported(description: "\(name) sets supportedModes")
         }
@@ -187,7 +202,7 @@ struct AppIntentsMetadata {
             "mangledTypeNameV2": mangledName,
             "openAppWhenRun": .bool(opensApp),
             "outputFlags": .int(flags),
-            "parameters": [],
+            "parameters": .array(parameters),
             "presentationStyle": 0,
             "requiredCapabilities": [],
             // 1 runs in the background, 2 opens the app first
@@ -203,6 +218,56 @@ struct AppIntentsMetadata {
             action["descriptionMetadata"] = ["descriptionText": Self.localized(description), "searchKeywords": []]
         }
         return (identifier, .object(action))
+    }
+
+    /// A parameter of an intent, from the backing property `@Parameter` declares (`_name`).
+    /// The property itself (`name`) and its projection (`$name`) are skipped.
+    private static func parameter(_ property: JSONValue, of intent: String) throws -> JSONValue? {
+        guard let type = property["type"]?.string, type.hasPrefix("AppIntents.IntentParameter<") else {
+            return nil
+        }
+        guard let label = property["label"]?.string, label.hasPrefix("_") else { return nil }
+        let name = String(label.dropFirst())
+        let what = "\(intent).\(name)"
+        guard property["valueKind"]?.string == "InitCall" else {
+            throw Unsupported(description: "\(what) is not declared with @Parameter(...)")
+        }
+        let valueType = String(type.dropFirst("AppIntents.IntentParameter<".count).dropLast())
+        guard let types = parameterTypes[valueType] else {
+            throw Unsupported(description: "\(what) is a \(valueType), only Int and String parameters can be indexed")
+        }
+        var title: String?
+        for argument in property["value"]?["arguments"]?.array ?? [] {
+            let label = argument["label"]?.string ?? ""
+            let kind = argument["valueKind"]?.string
+            if label == "title" {
+                title = try literal(argument, "\(what).title")
+            } else if runtimeParameterArguments.contains(label) {
+                continue
+            } else if !defaultedParameterArguments.contains(label) || !(kind == "NilLiteral" || kind == "Runtime") {
+                // a default argument the caller did not pass is Runtime, as is a value only known when running
+                throw Unsupported(description: "\(what) sets \(label.isEmpty ? "an unlabeled argument" : label)")
+            }
+        }
+        guard let title else {
+            throw Unsupported(description: "\(what) has no title")
+        }
+        return [
+            "capabilities": 0,
+            "dynamicOptionsSupport": 0,
+            "inputConnectionBehavior": 0,
+            "isInput": false,
+            "isOptional": false,
+            "name": .string(name),
+            "resolvableInputTypes": .array(types.inputTypes.map { ["kindValue": 0, "valueType": $0] }),
+            "title": localized(title),
+            "typeSpecificMetadata": [],
+            "valueType": types.valueType,
+        ]
+    }
+
+    private static func primitive(_ typeIdentifier: Int) -> JSONValue {
+        ["primitive": ["wrapper": ["typeIdentifier": .int(typeIdentifier)]]]
     }
 
     private func shortcuts(_ provider: JSONValue) throws -> [JSONValue] {
