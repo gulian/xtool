@@ -76,6 +76,30 @@ private let shortcuts: JSONValue = [
     ],
 ]
 
+/// The properties the compiler lists for `@Parameter(title:) var name: Value`: the backing property,
+/// the property itself and its projection. `arguments` replaces or adds `@Parameter` arguments.
+private func parameter(_ name: String, _ value: String, title: String, arguments: [String: JSONValue] = [:]) -> [JSONValue] {
+    let type = JSONValue.string("AppIntents.IntentParameter<\(value)>")
+    var call: [String: JSONValue] = [
+        "title": ["label": "title", "type": "Foundation.LocalizedStringResource", "valueKind": "RawLiteral", "value": .string(title)],
+        "description": ["label": "description", "valueKind": "NilLiteral"],
+        "default": ["label": "default", "valueKind": "NilLiteral"],
+        "controlStyle": ["label": "controlStyle", "valueKind": "Runtime"],
+        "requestValueDialog": ["label": "requestValueDialog", "valueKind": "NilLiteral"],
+        "inputConnectionBehavior": ["label": "inputConnectionBehavior", "valueKind": "Runtime"],
+    ]
+    call.merge(arguments) { $1 }
+    let initCall: JSONValue = [
+        "type": type,
+        "arguments": .array(call.keys.sorted().compactMap { call[$0] }),
+    ]
+    return [
+        ["label": .string("_\(name)"), "type": type, "isStatic": "false", "isComputed": "false", "valueKind": "InitCall", "value": initCall],
+        ["label": .string(name), "type": .string(value), "isStatic": "false", "isComputed": "true", "valueKind": "InitCall", "value": initCall],
+        ["label": .string("$\(name)"), "type": type, "isStatic": "false", "isComputed": "true", "valueKind": "Runtime"],
+    ]
+}
+
 private func decode(_ files: [String: Data]?) throws -> JSONValue {
     let data = try #require(files?["extract.actionsdata"])
     return try JSONDecoder().decode(JSONValue.self, from: data)
@@ -135,15 +159,66 @@ private func decode(_ files: [String: Data]?) throws -> JSONValue {
     ])
 }
 
+@Test func appIntentsMetadataIndexesIntAndStringParameters() throws {
+    let entries = [
+        intent("Widgets.SetLevel", properties: [literal("title", "Set the level")] + parameter("level", "Swift.Int", title: "Level")),
+        intent(
+            "App.Search",
+            properties: [literal("title", "Search")] + parameter(
+                "query", "Swift.String", title: "Query",
+                arguments: ["requestValueDialog": ["label": "requestValueDialog", "valueKind": "InitCall"]]
+            )
+        ),
+    ]
+    let metadata = try decode(try AppIntentsMetadata(entries: entries, sharedBundleIDs: [:]).files())
+    func primitive(_ identifier: Int) -> JSONValue {
+        ["primitive": ["wrapper": ["typeIdentifier": .int(identifier)]]]
+    }
+    func expected(_ name: String, _ title: String, _ valueType: JSONValue, _ inputTypes: [JSONValue]) -> JSONValue {
+        [[
+            "capabilities": 0, "dynamicOptionsSupport": 0, "inputConnectionBehavior": 0, "isInput": false,
+            "isOptional": false, "name": .string(name),
+            "resolvableInputTypes": .array(inputTypes.map { ["kindValue": 0, "valueType": $0] }),
+            "title": ["alternatives": [], "key": .string(title)], "typeSpecificMetadata": [], "valueType": valueType,
+        ]]
+    }
+    // As Xcode 26.6 writes them
+    #expect(metadata["actions"]?["SetLevel"]?["parameters"]
+        == expected("level", "Level", primitive(2), [primitive(0), primitive(7), primitive(2)]))
+    #expect(metadata["actions"]?["Search"]?["parameters"] == expected(
+        "query", "Query", primitive(0),
+        [primitive(0), ["array": ["wrapper": ["capabilities": 3, "memberValueType": primitive(2)]]], primitive(2)]
+    ))
+}
+
+@Test func appIntentsMetadataIsWrittenAsXcodeWritesIt() throws {
+    let entries = [intent("App.OpenIntent", properties: [literal("title", "Ouvrir à/b")])]
+    let files = try #require(try AppIntentsMetadata(entries: entries, sharedBundleIDs: [:]).files())
+    let index = String(decoding: try #require(files["extract.actionsdata"]), as: UTF8.self)
+    #expect(index.hasPrefix(#"{"actions":{"OpenIntent":{"assistantDefinedSchemaTraits":[],"#))
+    #expect(index.contains(#""key":"Ouvrir à/b""#))
+    #expect(String(decoding: try #require(files["version.json"]), as: UTF8.self)
+        == "{\n  \"version\" : \"3.0\",\n  \"toolsVersion\" : \"17F113\"\n}")
+}
+
 @Test func appIntentsMetadataIsLeftOutWithoutIntents() throws {
     let entries: [JSONValue] = [["typeName": "App.Other", "conformances": ["SwiftUI.App"]]]
     #expect(try AppIntentsMetadata(entries: entries, sharedBundleIDs: [:]).files() == nil)
 }
 
 @Test func appIntentsMetadataRefusesWhatItCannotIndex() {
-    let parameter: JSONValue = ["label": "_name", "propertyWrappers": [], "valueKind": "Runtime"]
+    let title = literal("title", "t")
     let cases: [JSONValue] = [
-        intent("App.ParamIntent", properties: [literal("title", "t"), parameter]),
+        intent("App.BoolIntent", properties: [title] + parameter("flag", "Swift.Bool", title: "Flag")),
+        intent("App.OptionalIntent", properties: [title] + parameter("level", "Swift.Optional<Swift.Int>", title: "Level")),
+        intent("App.DefaultIntent", properties: [title] + parameter(
+            "level", "Swift.Int", title: "Level",
+            arguments: ["default": ["label": "default", "valueKind": "RawLiteral", "value": "2"]]
+        )),
+        intent("App.ComputedParameterTitleIntent", properties: [title] + parameter(
+            "level", "Swift.Int", title: "Level",
+            arguments: ["title": ["label": "title", "valueKind": "Runtime"]]
+        )),
         intent("App.NoTitleIntent", properties: []),
         intent("App.ComputedTitleIntent", properties: [["label": "title", "valueKind": "Runtime"]]),
         intent("App.EntityIntent", conformances: ["AppIntents.ForegroundContinuableIntent"], properties: [literal("title", "t")]),
