@@ -312,6 +312,7 @@ struct DevCommand: AsyncParsableCommand {
         subcommands: [
             DevXcodeCommand.self,
             DevBuildCommand.self,
+            DevSignCommand.self,
             DevRunCommand.self,
             DevBSPCommand.self,
         ],
