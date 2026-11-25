@@ -11,7 +11,7 @@ import XKit
 struct DevSignCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "sign",
-        abstract: "Provision and sign a built iOS or tvOS .app for a device"
+        abstract: "Provision and sign a built iOS, tvOS or watchOS .app for a device"
     )
 
     @Argument(help: "The .app bundle to sign in place")
@@ -32,8 +32,10 @@ struct DevSignCommand: AsyncParsableCommand {
         switch (info?["CFBundleSupportedPlatforms"] as? [String])?.first {
         case "iPhoneOS": platform = .iOS
         case "AppleTVOS": platform = .tvOS
+        // A standalone watch app; it is signed with an iOS development profile that names the watch.
+        case "WatchOS": platform = .watchOS
         case let other:
-            throw Console.Error("sign supports iOS and tvOS apps, not \(other ?? "an app without CFBundleSupportedPlatforms").")
+            throw Console.Error("sign supports iOS, tvOS and watchOS apps, not \(other ?? "an app without CFBundleSupportedPlatforms").")
         }
         let auth = try AuthToken.saved()
         // Never revoke: this runs unattended, and revoking the certificate breaks apps installed with it.

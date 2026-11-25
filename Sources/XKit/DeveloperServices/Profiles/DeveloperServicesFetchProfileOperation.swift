@@ -154,6 +154,8 @@ extension Components.Schemas.Device.AttributesPayload.DeviceClassPayload.Value1P
         switch platform {
         case .tvOS:
             self == .appleTv
+        case .watchOS:
+            self == .appleWatch
         case .iOS:
             self == .ipad || self == .iphone || self == .ipod
         default:
