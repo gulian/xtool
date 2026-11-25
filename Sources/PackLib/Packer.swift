@@ -615,7 +615,7 @@ extension Plan.Product {
             ]),
         ]
         """
-        case .appExtension: return """
+        case .appExtension: """
         [
             // Link to Foundation framework which implements the _NSExtensionMain entrypoint
             .linkedFramework("Foundation"),

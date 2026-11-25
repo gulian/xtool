@@ -6,12 +6,12 @@ import XKit
 /// Signs an app that was built earlier, for one device, without building it again.
 ///
 /// `xtool dev build --sign` only signs what it has just built. A tool that keeps built apps and
-/// installs them later, or hands them over to be downloaded, needs to sign
+/// installs them later (on an Apple TV, which xtool cannot reach over usbmuxd) needs to sign
 /// them on their own.
 struct DevSignCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "sign",
-        abstract: "Provision and sign a built iOS .app for a device"
+        abstract: "Provision and sign a built iOS or tvOS .app for a device"
     )
 
     @Argument(help: "The .app bundle to sign in place")
@@ -28,9 +28,12 @@ struct DevSignCommand: AsyncParsableCommand {
         let info = try PropertyListSerialization.propertyList(
             from: Data(contentsOf: app.appendingPathComponent("Info.plist")), format: nil
         ) as? [String: Any]
-        let platform = (info?["CFBundleSupportedPlatforms"] as? [String])?.first
-        guard platform == "iPhoneOS" else {
-            throw Console.Error("sign supports iOS apps, not \(platform ?? "an app without CFBundleSupportedPlatforms").")
+        let platform: DeveloperServicesPlatform
+        switch (info?["CFBundleSupportedPlatforms"] as? [String])?.first {
+        case "iPhoneOS": platform = .iOS
+        case "AppleTVOS": platform = .tvOS
+        case let other:
+            throw Console.Error("sign supports iOS and tvOS apps, not \(other ?? "an app without CFBundleSupportedPlatforms").")
         }
         let auth = try AuthToken.saved()
         // Never revoke: this runs unattended, and revoking the certificate breaks apps installed with it.
@@ -40,7 +43,8 @@ struct DevSignCommand: AsyncParsableCommand {
             defer { print() }
             try await installer.signInPlace(
                 app: app,
-                targetDevice: .init(udid: deviceUdid, name: deviceName)
+                targetDevice: .init(udid: deviceUdid, name: deviceName),
+                platform: platform
             )
         } catch let error as CancellationError {
             guard await installDelegate.refusedRevocation else { throw error }
