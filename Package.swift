@@ -53,6 +53,11 @@ let package = Package(
         .package(url: "https://github.com/xtool-org/xtool-core", .upToNextMinor(from: "1.5.1")),
         .package(url: "https://github.com/xtool-org/SwiftyMobileDevice", .upToNextMinor(from: "1.7.0")),
         .package(url: "https://github.com/xtool-org/swift-rcodesign", .upToNextMinor(from: "0.2.0")),
+        // TODO: temporary, points at the branch of xtool-org/AssetKit#2. Switch to
+        // .upToNextMinor(from: "<tag>") once AssetKit tags a release including it.
+        // TODO: temporary, points at gulian/AssetKit app-store-processing: xtool-org/AssetKit#3
+        // plus the BOM tree fixes App Store Connect needs. Switch to a tag once released.
+        .package(url: "https://github.com/gulian/AssetKit", revision: "e077f8146abcec600de1f3df2eb4bf26927f24c2"),
 
         .package(url: "https://github.com/apple/swift-system", from: "1.4.0"),
         .package(url: "https://github.com/apple/swift-http-types", from: "1.3.1"),
@@ -169,9 +174,16 @@ let package = Package(
                 "XToolSupport",
                 "XCLIUtils",
                 "PackLib",
+                .product(name: "ConcurrencyExtras", package: "swift-concurrency-extras"),
                 .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "Dependencies", package: "swift-dependencies"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "X509", package: "swift-certificates"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
+            ],
+            resources: [
+                .copy("Fixtures"),
             ],
             swiftSettings: swiftSettings,
         ),
@@ -211,6 +223,7 @@ let package = Package(
             dependencies: [
                 "XUtils",
                 "XcodeProjects",
+                .product(name: "AssetKit", package: "AssetKit"),
                 .product(name: "Superutils", package: "xtool-core"),
                 .product(name: "Yams", package: "Yams"),
                 .product(name: "XcodeProjectFormat", package: "xcode-project-format"),

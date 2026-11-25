@@ -85,6 +85,7 @@ public struct Planner: Sendable {
             idSpecifier: schema.idSpecifier,
             iconPath: schema.iconPath,
             rootResources: schema.resources,
+            assetCatalogPath: schema.assetCatalogs?.first,
             entitlementsPath: schema.entitlementsPath
         )
 
@@ -101,6 +102,7 @@ public struct Planner: Sendable {
                             idSpecifier: ext.bundleID.flatMap(PackSchema.IDSpecifier.bundleID) ?? .orgID(app.bundleID),
                             iconPath: nil,
                             rootResources: ext.resources,
+                            assetCatalogPath: ext.assetCatalogs?.first,
                             entitlementsPath: ext.entitlementsPath
                         )
                     }
@@ -123,6 +125,7 @@ public struct Planner: Sendable {
         idSpecifier: PackSchema.IDSpecifier,
         iconPath: String?,
         rootResources: [String]?,
+        assetCatalogPath: String?,
         entitlementsPath: String?
     ) async throws -> Plan.Product {
         let library = try selectLibrary(
@@ -182,11 +185,12 @@ public struct Planner: Sendable {
             "CFBundleExecutable": library.name,
             "CFBundleDisplayName": library.name,
             "CFBundlePackageType": type.fourCharCode,
+            // extensions need it too, App Store Connect rejects them without it
+            "UIDeviceFamily": [1, 2],
         ]
 
         switch type {
         case .application:
-            infoPlist["UIDeviceFamily"] = [1, 2]
             infoPlist["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait"]
             infoPlist["UISupportedInterfaceOrientations~ipad"] = [
                 "UIInterfaceOrientationPortrait",
@@ -219,7 +223,8 @@ public struct Planner: Sendable {
             resources: resources,
             modules: modules.sorted(),
             iconPath: iconPath,
-            entitlementsPath: entitlementsPath
+            entitlementsPath: entitlementsPath,
+            assetCatalogPath: assetCatalogPath
         )
     }
 
@@ -326,6 +331,8 @@ public struct Plan: Sendable {
         public var modules: [String]
         public var iconPath: String?
         public var entitlementsPath: String?
+        /// Path to an `.xcassets` catalog, relative to the package root.
+        public var assetCatalogPath: String?
 
         public var targetName: String {
             "\(self.product)-\(self.type.targetSuffix)"

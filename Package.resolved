@@ -1,5 +1,5 @@
 {
-  "originHash" : "2ccd077fc130f0f1b1279d87aa61d1fc243964d7ad49489a12021577c54df9de",
+  "originHash" : "58acbdb04ed72eafda900e11dbece740e720d1134b054faeeeda5808bf0a6f12",
   "pins" : [
     {
       "identity" : "aexml",
@@ -8,6 +8,14 @@
       "state" : {
         "revision" : "dd9206de0717d658daec6a064992894fdab8ae17",
         "version" : "4.7.3"
+      }
+    },
+    {
+      "identity" : "assetkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gulian/AssetKit",
+      "state" : {
+        "revision" : "e077f8146abcec600de1f3df2eb4bf26927f24c2"
       }
     },
     {
@@ -35,6 +43,15 @@
       "state" : {
         "revision" : "114354e8c1667a2edc4993700fb9fa4f90157b56",
         "version" : "1.2.2"
+      }
+    },
+    {
+      "identity" : "h",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/rarestype/h",
+      "state" : {
+        "revision" : "aa3626829160917d4378330617971977cbd78f5b",
+        "version" : "1.0.1"
       }
     },
     {
@@ -341,6 +358,15 @@
       "state" : {
         "revision" : "c97e0f0187d95542b4a254f5bb4dc67f43bf73c9",
         "version" : "1.4.0"
+      }
+    },
+    {
+      "identity" : "swift-png",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tayloraswift/swift-png",
+      "state" : {
+        "revision" : "2d17c6c51c098628574c0383f1119892655a73a2",
+        "version" : "4.5.2"
       }
     },
     {
