@@ -39,6 +39,16 @@ infoPath: path/to/Info.plist
 >
 > After running `xtool dev [build]`, you can inspect the built app bundle at `./xtool/YourApp.app` to view its `Info.plist` and other resources. 
 
+### Apple build keys
+
+For device builds, xtool also stamps the keys that Xcode writes to describe the toolchain it built with: `DTXcode`, `DTXcodeBuild`, `DTSDKName`, `DTSDKBuild`, `DTPlatformName`, `DTPlatformVersion`, `DTPlatformBuild` and `DTCompiler`. They go into the app and every app extension. App Store Connect expects them on uploaded builds.
+
+The values come from the Xcode you installed the Darwin SDK from. `xtool sdk install` records them (also with `--slim`) in `xtool-sdk-info.json` inside the SDK. A key that you set yourself in your `Info.plist` is never overwritten.
+
+An SDK installed by an older xtool may not have this file. Normal (non-slim) SDKs are read from their retained `Xcode.app`. For an older slim SDK xtool prints a warning and leaves the keys out; reinstall the SDK with `xtool sdk install` to add them.
+
+`BuildMachineOSBuild` is the build number of the macOS that ran the build, which does not exist on Linux, so xtool leaves it out. To stamp one anyway, set the `XTOOL_BUILD_MACHINE_OS_BUILD` environment variable, for example `XTOOL_BUILD_MACHINE_OS_BUILD=25G83 xtool dev build`.
+
 For example, you might create an `Info.plist` file that looks something like
 
 ```plist
@@ -107,6 +117,23 @@ iconPath: Resources/AppIcon.png
 > Tip:
 >
 > Your app icon must be a png, and it should ideally have a resolution of 1024x1024px.
+
+## Add an asset catalog
+
+To use an Xcode asset catalog (`.xcassets`), which can hold images, colors and the app icon, add it to `xtool.yml`:
+
+```yaml
+assetCatalogs:
+- Resources/Assets.xcassets
+```
+
+xtool compiles the catalog into `Assets.car` in the app bundle, so `Image("Logo", bundle: .main)` and `Color("Brand", bundle: .main)` work as usual. If the catalog contains an `AppIcon.appiconset`, xtool also adds the matching `CFBundleIcons` and `CFBundleIconName` keys to your `Info.plist`, and ignores `iconPath`.
+
+Extensions can have their own catalog via an `assetCatalogs` key on the extension entry. Each app or extension supports one catalog.
+
+> Note:
+>
+> xtool compiles catalogs itself, so it works on Linux. It supports PNG, JPEG and SVG images (SVG needs `rsvg-convert` installed), colors, and app icons with per-size entries. Single-size (1024x1024 "universal") app icons are supported, but their dark and tinted variants are ignored. PDF vectors, data sets, sticker packs and other specialized asset types are not supported. When you generate an Xcode project with `xtool dev generate-xcode-project`, the catalog is passed to Xcode unchanged.
 
 ## Add entitlements
 
