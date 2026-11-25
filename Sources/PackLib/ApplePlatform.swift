@@ -3,6 +3,7 @@ import Foundation
 package enum ApplePlatform: String, CaseIterable, Sendable {
     case iOS
     case tvOS
+    case watchOS
     case macOS
     case macCatalyst
 
@@ -13,6 +14,7 @@ package enum ApplePlatform: String, CaseIterable, Sendable {
         switch os {
         case "ios": self = components.contains("macabi") ? .macCatalyst : .iOS
         case "tvos": self = .tvOS
+        case "watchos": self = .watchOS
         case "macos", "macosx": self = .macOS
         default: return nil
         }
@@ -35,7 +37,12 @@ package enum ApplePlatform: String, CaseIterable, Sendable {
     }
 
     package var minimumDeploymentTarget: String {
-        self == .macOS ? "10.15" : "13.0"
+        switch self {
+        case .macOS: "10.15"
+        // from xtool-org/xtool#350
+        case .watchOS: "9.0"
+        default: "13.0"
+        }
     }
 
     package func effectiveDeploymentTarget(
@@ -44,7 +51,7 @@ package enum ApplePlatform: String, CaseIterable, Sendable {
         let declared = platforms[packagePlatformName] ?? (self == .macCatalyst ? platforms["ios"] : nil)
         // Match PackageModel.Platform.oldestSupportedVersion in SwiftPM 6.4.
         let toolchainMinimum = swiftVersion >= SwiftVersion(6, 4)
-            ? (self == .macOS ? "12.0" : "15.0") : minimumDeploymentTarget
+            ? (self == .macOS ? "12.0" : self == .watchOS ? "9.0" : "15.0") : minimumDeploymentTarget
         return [declared, toolchainMinimum, sdkMinimum, tripleMinimum].compactMap { $0 }.max {
             $0.compare($1, options: .numeric) == .orderedAscending
         } ?? toolchainMinimum
@@ -55,6 +62,7 @@ package enum ApplePlatform: String, CaseIterable, Sendable {
         switch self {
         case .iOS: return simulator ? "iPhoneSimulator" : "iPhoneOS"
         case .tvOS: return simulator ? "AppleTVSimulator" : "AppleTVOS"
+        case .watchOS: return simulator ? "WatchSimulator" : "WatchOS"
         case .macOS, .macCatalyst: return "MacOSX"
         }
     }
@@ -69,6 +77,7 @@ package enum ApplePlatform: String, CaseIterable, Sendable {
         switch self {
         case .iOS: return simulator ? "ios-simulator" : "ios"
         case .tvOS: return simulator ? "tvos-simulator" : "tvos"
+        case .watchOS: return simulator ? "watchos-simulator" : "watchos"
         case .macOS: return "macos"
         case .macCatalyst: return "mac-catalyst"
         }

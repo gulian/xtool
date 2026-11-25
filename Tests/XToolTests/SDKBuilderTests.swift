@@ -55,12 +55,12 @@ func sdkNameSkipsAppleTVDirectoriesWithoutVersionedSDKs(platform: String) throws
     }
 }
 
-@Test func sdkExtractionRetainsTVSDKs() {
+@Test func sdkExtractionRetainsTVAndWatchSDKs() {
     let device = "Contents/Developer/Platforms/AppleTVOS.platform/Developer/SDKs/AppleTVOS26.0.sdk/usr/lib/libc.tbd"
     let simulator = "Contents/Developer/Platforms/AppleTVSimulator.platform/Developer/usr/lib/swift/libswiftTesting.dylib"
     let watch = "Contents/Developer/Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.0.sdk/usr/lib/libc.tbd"
     #expect(SDKEntry.wanted.matches(device.split(separator: "/")[...]))
     #expect(SDKEntry.wanted.matches(simulator.split(separator: "/")[...]))
-    #expect(!SDKEntry.wanted.matches(watch.split(separator: "/")[...]))
+    #expect(SDKEntry.wanted.matches(watch.split(separator: "/")[...]))
     #expect(SDKEntry.wanted.matches("Contents/version.plist".split(separator: "/")[...]))
 }

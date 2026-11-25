@@ -49,7 +49,7 @@ func plannerUsesTargetDeploymentAndDeviceFamily(triple: String, customMinimum: S
         #expect(plan.app.infoPlist["LSMinimumSystemVersion"] as? String == "14.0")
         #expect(plan.app.infoPlist["MinimumOSVersion"] as? String == customMinimum)
         #expect(plan.app.infoPlist["UIDeviceFamily"] as? [Int] == [6])
-    case .macOS:
+    case .macOS, .watchOS:
         Issue.record("Unexpected test platform")
     }
 }

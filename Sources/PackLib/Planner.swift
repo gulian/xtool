@@ -197,6 +197,7 @@ public struct Planner: Sendable {
         switch platform {
         case .iOS: infoPlist["UIDeviceFamily"] = [1, 2]
         case .tvOS: infoPlist["UIDeviceFamily"] = [3]
+        case .watchOS: infoPlist["UIDeviceFamily"] = [4]
         case .macCatalyst: infoPlist["UIDeviceFamily"] = [6]
         case .macOS: break
         }
@@ -221,6 +222,10 @@ public struct Planner: Sendable {
                 infoPlist["UILaunchScreen"] = [:] as [String: Sendable]
             case .tvOS:
                 break
+            case .watchOS:
+                // a standalone watch app, from xtool-org/xtool#350
+                infoPlist["WKApplication"] = true
+                infoPlist["WKWatchOnly"] = true
             case .macCatalyst:
                 break
             case .macOS:

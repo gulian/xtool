@@ -80,7 +80,7 @@ struct SDKBuilder {
     // bump this when the sdk builder logic changes
     static let sdkEpoch = 5
 
-    static let platforms = ["iPhoneOS", "MacOSX", "iPhoneSimulator", "AppleTVOS", "AppleTVSimulator"]
+    static let platforms = ["iPhoneOS", "MacOSX", "iPhoneSimulator", "AppleTVOS", "AppleTVSimulator", "WatchOS", "WatchSimulator"]
 
     static func sdkDefinition(sdks: [String: String]) -> SDKDefinition {
         func triple(platform: String, sdk: String, catalyst: Bool) -> SDKDefinition.Triple {
@@ -105,6 +105,8 @@ struct SDKBuilder {
             ],
             "AppleTVOS": ["arm64-apple-tvos"],
             "AppleTVSimulator": ["arm64-apple-tvos-simulator", "x86_64-apple-tvos-simulator"],
+            "WatchOS": ["arm64_32-apple-watchos", "arm64-apple-watchos"],
+            "WatchSimulator": ["arm64-apple-watchos-simulator", "x86_64-apple-watchos-simulator"],
         ]
         var targetTriples: [String: SDKDefinition.Triple] = [:]
         for (platform, sdk) in sdks {
@@ -159,8 +161,8 @@ struct SDKBuilder {
         var sdks: [String: String] = [:]
         for platform in Self.platforms {
             let sdkDirectory = dev.appendingPathComponent("Platforms/\(platform).platform/Developer/SDKs")
-            // Xcode installations may omit optional tvOS SDKs. Do not advertise unavailable triples.
-            if platform.hasPrefix("AppleTV") && !sdkDirectory.dirExists { continue }
+            // Xcode installations may omit optional tvOS and watchOS SDKs. Do not advertise unavailable triples.
+            if (platform.hasPrefix("AppleTV") || platform.hasPrefix("Watch")) && !sdkDirectory.dirExists { continue }
             guard let name = try Self.sdkName(in: sdkDirectory, platform: platform, prefix: platform) else { continue }
             sdks[platform] = name
             d.out.print("- \(name)")

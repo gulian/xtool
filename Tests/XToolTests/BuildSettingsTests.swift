@@ -20,7 +20,7 @@ func nativeSwiftPMUsesRegisteredSDKTriple(triple: String, sdkTriple: String, min
     #expect(settings.triple(deploymentTarget: "15.0") == "arm64-apple-macosx15.0")
 }
 
-@Test(arguments: ["arm64-apple-watchos", "arm64-apple-visionos", "arm64-apple-tvo"])
+@Test(arguments: ["arm64-apple-visionos", "arm64-apple-tvo"])
 func rejectsUnsupportedBuildTargets(triple: String) async throws {
     do {
         _ = try await BuildSettings(configuration: .debug, triple: triple, buildSystem: .swiftPM)
@@ -30,7 +30,7 @@ func rejectsUnsupportedBuildTargets(triple: String) async throws {
     }
 }
 
-@Test(arguments: ["arm64-apple-watchos", "arm64-apple-visionos", "arm64-apple-tvo"])
+@Test(arguments: ["arm64-apple-visionos", "arm64-apple-tvo"])
 func devBuildRejectsUnsupportedTargetsBeforeSetup(triple: String) async throws {
     let command = try DevBuildCommand.parse(["--triple", triple])
     do {
@@ -38,6 +38,6 @@ func devBuildRejectsUnsupportedTargetsBeforeSetup(triple: String) async throws {
         Issue.record("Expected the build command to reject \(triple)")
     } catch {
         #expect(String(describing: error).contains("Unsupported target triple '\(triple)'"))
-        #expect(String(describing: error).contains("iOS, tvOS, macOS, macCatalyst"))
+        #expect(String(describing: error).contains("iOS, tvOS, watchOS, macOS, macCatalyst"))
     }
 }

@@ -367,11 +367,12 @@ public struct Packer: Sendable {
             var info = product.infoPlist.merging(buildMetadata.mapValues { $0 as any Sendable }) { _, recorded in recorded }
 
             // Xcode adds these to extensions as well, App Store Connect rejects extensions without them
-            if !platform.usesContentsDirectory {
+            // a watch app has neither, as xtool-org/xtool#350 builds it
+            if !platform.usesContentsDirectory && platform != .watchOS {
                 info["UIRequiredDeviceCapabilities"] = ["arm64"]
             }
             if product.type == .application {
-                if !platform.usesContentsDirectory {
+                if !platform.usesContentsDirectory && platform != .watchOS {
                     info["LSRequiresIPhoneOS"] = true
                 }
             }
