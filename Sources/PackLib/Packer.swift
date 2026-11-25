@@ -100,6 +100,12 @@ public struct Packer: Sendable {
     }
 
     private func build() async throws {
+        let sdkVersion: String?
+        #if os(macOS)
+        sdkVersion = nil
+        #else
+        sdkVersion = try DarwinSDK.current()?.sdkVersion(for: buildSettings.sdkTriple)
+        #endif
         let xtoolDir = URL(fileURLWithPath: "xtool")
         let packageDir = xtoolDir.appendingPathComponent(".xtool-tmp")
         try? FileManager.default.removeItem(at: packageDir)
@@ -120,7 +126,7 @@ public struct Packer: Sendable {
         let package = Package(
             name: "\(plan.app.product)-Builder",
             platforms: [
-                .iOS("\(plan.app.deploymentTarget)"),
+                .\(buildSettings.platform.rawValue)("\(plan.app.deploymentTarget)"),
             ],
             dependencies: [
                 .package(name: "RootPackage", path: "../.."),
@@ -134,7 +140,13 @@ public struct Packer: Sendable {
                             dependencies: [
                                 .product(name: "\($0.product)", package: "RootPackage"),
                             ],
-                            linkerSettings: \($0.linkerSettings(extraFlags: sysrootFlags))
+                            linkerSettings: \($0.linkerSettings(
+                                platform: buildSettings.platform,
+                                triple: buildSettings.triple,
+                                // iOS gets its SDK version from -isysroot, see sysrootLinkerFlags
+                                sdkVersion: buildSettings.platform == .iOS ? nil : sdkVersion,
+                                extraFlags: buildSettings.platform == .iOS ? sysrootFlags : []
+                            ))
                         )
                         """
                     }
@@ -165,21 +177,17 @@ public struct Packer: Sendable {
             try Data().write(to: sources.appendingPathComponent("stub.c", isDirectory: false))
         }
 
+        var arguments = [
+            "--scratch-path", ".build",
+            // Keep SwiftPM from replacing the root package's resolved dependencies with the builder's subset.
+            "--disable-automatic-resolution",
+        ]
+        if let toolset = try writeDeploymentToolset(in: packageDir) {
+            arguments += ["--toolset", toolset.path]
+        }
         let buildConfig = try await buildSettings
             .withPackagePath(packageDir.path)
-            .swiftPMInvocation(
-                forTool: "build",
-                arguments: [
-                    "--scratch-path", ".build",
-                    // resolving can cause SwiftPM to overwrite the root package deps
-                    // with just the deps needed for the builder package (which is to
-                    // say, any "dev dependencies" of the root package may be removed.)
-                    // fortunately we've already resolved the root package by this point
-                    // in order to dump the plan, so we can skip resolution here to skirt
-                    // the issue.
-                    "--disable-automatic-resolution",
-                ] + constValuesOptions,
-            )
+            .swiftPMInvocation(forTool: "build", arguments: arguments + constValuesOptions)
         try await Subprocess.run(
             buildConfig,
             output: .currentStandardOutput,
@@ -188,7 +196,24 @@ public struct Packer: Sendable {
         .checkSuccess()
     }
 
+    func writeDeploymentToolset(in directory: URL) throws -> URL? {
+        guard buildSettings.buildSystem == .swiftPM, buildSettings.tripleDeploymentTarget != nil else { return nil }
+        // Keep host build tools on their native triple while targeting the app's effective deployment version.
+        let triple = buildSettings.triple(deploymentTarget: plan.app.deploymentTarget)
+        let options = ["extraCLIOptions": ["-target", triple]]
+        let toolset: [String: Any] = [
+            "schemaVersion": "1.0",
+            "swiftCompiler": options,
+            "cCompiler": options,
+            "cxxCompiler": options,
+        ]
+        let path = directory.appendingPathComponent("deployment-toolset.json")
+        try JSONSerialization.data(withJSONObject: toolset, options: .sortedKeys).write(to: path, options: .atomic)
+        return path
+    }
+
     public func pack() async throws -> URL {
+        try plan.validateResourceBundleSupport(platform: buildSettings.platform, buildSystem: buildSettings.buildSystem)
         try await build()
         warnAboutBuildInfo()
 
@@ -199,15 +224,34 @@ public struct Packer: Sendable {
         let binPath: String
         switch buildSettings.buildSystem {
         case .swiftPM:
-            binPath = "\(buildSettings.triple)/\(buildSettings.configuration.rawValue)"
+            binPath = "\(buildSettings.sdkTriple)/\(buildSettings.configuration.rawValue)"
         case .swiftBuild:
-            binPath = "out/Products/\(swiftBuildConfigurationDirectory)"
+            let platformName = buildSettings.platform.buildProductsPlatform(triple: buildSettings.triple)
+            let suffix = buildSettings.platform == .macOS ? "" : "-\(platformName)"
+            binPath = "out/Products/\(buildSettings.configuration.swiftBuildValue)\(suffix)"
         }
         let binDir = URL(
             fileURLWithPath: ".build/\(binPath)",
             isDirectory: true
         )
 
+        let metadata: [String: String]
+        #if os(macOS)
+        metadata = [:]
+        #else
+        // stampBuildInfo does it for iOS
+        metadata = buildSettings.platform == .iOS
+            ? [:] : try DarwinSDK.current()?.buildMetadata(for: buildSettings.sdkTriple) ?? [:]
+        #endif
+        try await packProducts(binDir: binDir, outputURL: outputURL, buildMetadata: metadata)
+
+        let dest = URL(fileURLWithPath: "xtool").appendingPathComponent(outputURL.lastPathComponent)
+        try? FileManager.default.removeItem(at: dest)
+        try output.persist(at: dest)
+        return dest
+    }
+
+    func packProducts(binDir: URL, outputURL: URL, buildMetadata: [String: String] = [:]) async throws {
         var bundleIDsByModule: [String: [String]] = [:]
         for product in plan.allProducts {
             for module in product.modules {
@@ -221,8 +265,9 @@ public struct Packer: Sendable {
                 try await pack(
                     product: product,
                     binDir: binDir,
-                    outputURL: product.directory(inApp: outputURL),
+                    outputURL: product.directory(inApp: outputURL, platform: buildSettings.platform),
                     sharedBundleIDs: sharedBundleIDs,
+                    buildMetadata: buildMetadata,
                     &group
                 )
             }
@@ -238,11 +283,6 @@ public struct Packer: Sendable {
                 }
             }
         }
-
-        let dest = URL(fileURLWithPath: "xtool").appendingPathComponent(outputURL.lastPathComponent)
-        try? FileManager.default.removeItem(at: dest)
-        try output.persist(at: dest)
-        return dest
     }
 
     @Sendable private func pack(
@@ -250,11 +290,16 @@ public struct Packer: Sendable {
         binDir: URL,
         outputURL: URL,
         sharedBundleIDs: [String: [String]],
+        buildMetadata: [String: String],
         _ group: inout ThrowingTaskGroup<Void, Error>
     ) async throws {
+        let platform = buildSettings.platform
+        let contentsURL = platform.contentsDirectory(in: outputURL)
+        let resourcesURL = platform.resourcesDirectory(in: outputURL)
+
         @Sendable func packFileToRoot(srcName: String) async throws {
             let srcURL = URL(fileURLWithPath: srcName)
-            let destURL = outputURL.appendingPathComponent(srcURL.lastPathComponent)
+            let destURL = resourcesURL.appendingPathComponent(srcURL.lastPathComponent)
             try FileManager.default.copyItem(at: srcURL, to: destURL)
 
             try Task.checkCancellation()
@@ -262,7 +307,7 @@ public struct Packer: Sendable {
 
         @Sendable func packFile(srcName: String, dstName: String? = nil, sign: Bool = false) async throws {
             let srcURL = URL(fileURLWithPath: srcName, relativeTo: binDir)
-            let dstURL = URL(fileURLWithPath: dstName ?? srcURL.lastPathComponent, relativeTo: outputURL)
+            let dstURL = URL(fileURLWithPath: dstName ?? srcURL.lastPathComponent, relativeTo: contentsURL)
             try? FileManager.default.createDirectory(at: dstURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: srcURL, to: dstURL)
 
@@ -270,7 +315,7 @@ public struct Packer: Sendable {
         }
 
         // Ensure output directory is available
-        try? FileManager.default.createDirectory(at: outputURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
 
         let assets = try await Packer.compileAssets(for: product)
         let iconPath = Packer.iconPath(for: product, assets: assets)
@@ -279,7 +324,9 @@ public struct Packer: Sendable {
             group.addTask {
                 switch command {
                 case .bundle(let package, let target):
-                    try await packFile(srcName: "\(package)_\(target).bundle")
+                    let name = "\(package)_\(target).bundle"
+                    let destination = platform.usesContentsDirectory ? "Resources/\(name)" : name
+                    try await packFile(srcName: name, dstName: destination)
                 case .binaryTarget(let name):
                     let src = URL(fileURLWithPath: "\(name).framework/\(name)", relativeTo: binDir)
                     let magic = Data("!<arch>\n".utf8)
@@ -309,25 +356,30 @@ public struct Packer: Sendable {
         }
         if let assets {
             group.addTask {
-                try assets.write(into: outputURL)
+                try assets.write(into: resourcesURL)
                 try Task.checkCancellation()
             }
         }
         group.addTask {
-            try writeAppIntentsMetadata(product: product, sharedBundleIDs: sharedBundleIDs, outputURL: outputURL)
+            try writeAppIntentsMetadata(product: product, sharedBundleIDs: sharedBundleIDs, outputURL: resourcesURL)
         }
         group.addTask {
-            try await packFile(srcName: product.targetName, dstName: product.product)
+            let destination = platform.usesContentsDirectory ? "MacOS/\(product.product)" : product.product
+            try await packFile(srcName: product.targetName, dstName: destination)
         }
         group.addTask {
-            var info = product.infoPlist
+            var info = product.infoPlist.merging(buildMetadata.mapValues { $0 as any Sendable }) { _, recorded in recorded }
 
             // Xcode adds these to extensions as well, App Store Connect rejects extensions without them
-            info["UIRequiredDeviceCapabilities"] = ["arm64"]
-            info["CFBundleSupportedPlatforms"] = Packer.cfBundleSupportedPlatforms(for: buildSettings.triple)
-            if product.type == .application {
-                info["LSRequiresIPhoneOS"] = true
+            if !platform.usesContentsDirectory {
+                info["UIRequiredDeviceCapabilities"] = ["arm64"]
             }
+            if product.type == .application {
+                if !platform.usesContentsDirectory {
+                    info["LSRequiresIPhoneOS"] = true
+                }
+            }
+            info["CFBundleSupportedPlatforms"] = Packer.cfBundleSupportedPlatforms(for: buildSettings.triple)
 
             if let sdkBuildInfo, Packer.stampsBuildInfo(for: buildSettings.triple) {
                 Packer.stampBuildInfo(
@@ -346,7 +398,7 @@ public struct Packer: Sendable {
                 info["CFBundleIconFile"] = iconName
             }
 
-            let infoPath = outputURL.appendingPathComponent("Info.plist")
+            let infoPath = contentsURL.appendingPathComponent("Info.plist")
             let encodedPlist = try PropertyListSerialization.data(
                 fromPropertyList: info,
                 format: .xml,
@@ -357,7 +409,7 @@ public struct Packer: Sendable {
     }
 
     private var swiftBuildConfigurationDirectory: String {
-        let platformName = buildSettings.triple.contains("simulator") ? "iphonesimulator" : "iphoneos"
+        let platformName = buildSettings.platform.buildProductsPlatform(triple: buildSettings.triple)
         return "\(buildSettings.configuration.swiftBuildValue)-\(platformName)"
     }
 
@@ -482,35 +534,51 @@ public struct Packer: Sendable {
     }
 
     static func cfBundleSupportedPlatforms(for triple: String) -> [String] {
-        let components = triple.split(separator: "-").map(String.init)
-        guard let appleIndex = components.firstIndex(of: "apple"),
-              components.indices.contains(appleIndex + 1) else {
-            return ["iPhoneOS"]
-        }
+        [ApplePlatform(triple: triple)?.supportedPlatform(triple: triple) ?? "iPhoneOS"]
+    }
+}
 
-        let os = components[appleIndex + 1].prefix { !$0.isNumber }
-        switch os {
-        case "ios" where components.contains("simulator"):
-            return ["iPhoneSimulator"]
-        case "ios":
-            return ["iPhoneOS"]
-        case "macos", "macosx":
-            return ["MacOSX"]
-        default:
-            return ["iPhoneOS"]
+extension Plan {
+    func validateResourceBundleSupport(platform: ApplePlatform, buildSystem: BuildSystem) throws {
+        guard platform.usesContentsDirectory, buildSystem == .swiftPM else { return }
+        let hasPackageResources = allProducts.contains { product in
+            product.resources.contains { resource in
+                if case .bundle = resource { return true }
+                return false
+            }
+        }
+        if hasPackageResources {
+            throw StringError("""
+            macOS and Mac Catalyst apps with Swift package resource bundles require SwiftBuild. \
+            Use Swift 6.4 or newer, which selects SwiftBuild automatically.
+            """)
         }
     }
 }
 
 extension Plan.Product {
     /// Swift source for the `linkerSettings:` argument of the generated target.
-    package func linkerSettings(extraFlags: [String]) -> String {
+    package func linkerSettings(
+        platform: ApplePlatform = .iOS,
+        triple: String = "arm64-apple-ios",
+        sdkVersion: String? = nil,
+        extraFlags: [String] = []
+    ) -> String {
         let extra = extraFlags.map { "\"\($0.swiftStringEscaped)\"," }.joined(separator: "\n")
-        switch self.type {
-        case .application: return """
+        let frameworks = platform.usesContentsDirectory ? "../Frameworks" : "Frameworks"
+        let appFrameworks = platform.usesContentsDirectory ? "../../../../Frameworks" : "../../Frameworks"
+        let sdkFlags = if let sdkVersion {
+            """
+            "-Xlinker", "-platform_version", "-Xlinker", "\(platform.linkerPlatform(triple: triple))",
+            "-Xlinker", "\(deploymentTarget)", "-Xlinker", "\(sdkVersion)",
+            """
+        } else { "" }
+        return switch self.type {
+        case .application: """
         [
             .unsafeFlags([
-                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/Frameworks",
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/\(frameworks)",
+                \(sdkFlags)
                 \(extra)
             ]),
         ]
@@ -523,9 +591,10 @@ extension Plan.Product {
                 // Set the entry point to Foundation`_NSExtensionMain
                 "-Xlinker", "-e", "-Xlinker", "_NSExtensionMain",
                 // Include frameworks that the host app may use
-                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../Frameworks",
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/\(appFrameworks)",
                 // ...as well as our own
-                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/Frameworks",
+                "-Xlinker", "-rpath", "-Xlinker", "@executable_path/\(frameworks)",
+                \(sdkFlags)
                 \(extra)
             ]),
         ]
