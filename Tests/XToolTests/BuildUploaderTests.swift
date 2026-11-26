@@ -63,11 +63,14 @@ private func makeKey() -> ASCKey {
 /// Run `operation` against `client`, without ever sleeping for real.
 private func withMock<T>(
     _ client: MockHTTPClient,
+    now: Date = Date(timeIntervalSince1970: 1_800_000_000),
     _ operation: () async throws -> T
 ) async throws -> T {
     try await withDependencies {
         $0.httpClient = client
         $0.continuousClock = ImmediateClock()
+        // the uploader reads the time to know when an upload URL expires
+        $0.date = .constant(now)
     } operation: {
         try await operation()
     }
@@ -389,12 +392,8 @@ private func happyPath(
             }
         }
 
-        let result = try await withDependencies {
-            $0.date = .constant(now)
-        } operation: {
-            try await withMock(client) {
-                try await BuildUploader(key: makeKey()).upload(ipa: ipa, info: info, appID: "APP1", wait: true)
-            }
+        let result = try await withMock(client, now: now) {
+            try await BuildUploader(key: makeKey()).upload(ipa: ipa, info: info, appID: "APP1", wait: true)
         }
         #expect(result.state == "COMPLETE")
         // only the part inside the margin triggers a refresh
