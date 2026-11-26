@@ -202,7 +202,9 @@ private func messages(_ findings: [IPAFinding]) -> String {
         zip.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         zip.arguments = ["zip", "-qr", ipa.path, "Payload"]
         zip.currentDirectoryURL = root
-        try zip.run()
+        // the 2.x tests see an async run() too: take Foundation's, then wait for it
+        let start: () throws -> Void = zip.run
+        try start()
         zip.waitUntilExit()
         try #require(zip.terminationStatus == 0)
 
